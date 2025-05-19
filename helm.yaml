@@ -1,0 +1,22 @@
+# chart.yaml
+apiVersion: v2
+name: vulnerable-app
+description: A Helm chart with security issues
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+home: https://example.com
+sources:
+  - https://github.com/example/example
+maintainers:
+  - name: Insecure Admin
+    email: admin@example.com
+dependencies:
+  - name: mysql
+    version: 8.0.0
+    repository: https://charts.bitnami.com/bitnami
+    # Security issue: No image digest specified
+  - name: redis
+    version: 6.0.0
+    repository: https://charts.bitnami.com/bitnami
+    # Security issue: Using vulnerable version
