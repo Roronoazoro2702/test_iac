@@ -1,0 +1,200 @@
+---
+- name: Vulnerable Server Configuration Playbook
+  hosts: all
+  become: yes
+  gather_facts: yes
+  
+  vars:
+    # Security issue: Hardcoded credentials
+    mysql_root_password: "mysql_root_2023"
+    admin_username: "admin"
+    admin_password: "AdminP@ss123"
+    api_key: "sk_live_abcdefghijklmnopqrstuvwxyz"
+    aws_access_key: "AKIAIOSFODNN7EXAMPLE"
+    aws_secret_key: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+    
+    # Security issue: Insecure settings
+    allow_root_ssh: true
+    disable_firewall: true
+    weak_ssl_ciphers: true
+    
+  tasks:
+    - name: Update package cache
+      apt:
+        update_cache: yes
+      when: ansible_os_family == "Debian"
+      
+    - name: Install packages without version pinning
+      # Security issue: No version specification
+      apt:
+        name:
+          - nginx
+          - mysql-server
+          - openssh-server
+          - vsftpd
+          - telnet
+          - rsh-server  # Security issue: Insecure service
+        state: present
+      when: ansible_os_family == "Debian"
+      
+    - name: Create admin user with sudo privileges
+      user:
+        name: "{{ admin_username }}"
+        password: "{{ admin_password | password_hash('sha512') }}"
+        groups: sudo
+        shell: /bin/bash
+        # Security issue: No account expiration
+        # Security issue: No password expiration policy
+        
+    - name: Configure SSH to allow root login
+      # Security issue: Allowing root SSH login
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^#?PermitRootLogin'
+        line: 'PermitRootLogin yes'
+        backup: yes
+      notify: restart ssh
+      
+    - name: Configure SSH to allow password authentication
+      # Security issue: Password authentication enabled
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^#?PasswordAuthentication'
+        line: 'PasswordAuthentication yes'
+        backup: yes
+      notify: restart ssh
+      
+    - name: Disable SSH host key checking
+      # Security issue: Disabling host key verification
+      lineinfile:
+        path: /etc/ssh/ssh_config
+        regexp: '^#?StrictHostKeyChecking'
+        line: 'StrictHostKeyChecking no'
+        
+    - name: Configure weak SSH ciphers
+      # Security issue: Using weak encryption
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        line: 'Ciphers aes128-cbc,3des-cbc,blowfish-cbc'
+        
+    - name: Disable firewall
+      # Security issue: Disabling firewall
+      systemd:
+        name: ufw
+        state: stopped
+        enabled: no
+      when: ansible_os_family == "Debian"
+      
+    - name: Set MySQL root password
+      mysql_user:
+        name: root
+        password: "{{ mysql_root_password }}"
+        login_unix_socket: /var/run/mysqld/mysqld.sock
+        state: present
+        
+    - name: Create MySQL database with default settings
+      # Security issue: No SSL, no encryption
+      mysql_db:
+        name: production_db
+        state: present
+        login_user: root
+        login_password: "{{ mysql_root_password }}"
+        
+    - name: Create MySQL user with excessive privileges
+      # Security issue: Granting all privileges
+      mysql_user:
+        name: app_user
+        password: "{{ admin_password }}"
+        priv: "*.*:ALL"
+        host: "%"  # Security issue: Allowing connections from any host
+        login_user: root
+        login_password: "{{ mysql_root_password }}"
+        state: present
+        
+    - name: Configure Nginx with insecure settings
+      # Security issue: Insecure web server configuration
+      copy:
+        content: |
+          server {
+              listen 80;
+              server_name _;
+              
+              # Security issue: Server tokens exposed
+              server_tokens on;
+              
+              # Security issue: No security headers
+              location / {
+                  root /var/www/html;
+                  index index.html;
+                  
+                  # Security issue: Directory traversal possible
+                  autoindex on;
+              }
+              
+              # Security issue: Exposing server status
+              location /server-status {
+                  stub_status on;
+              }
+          }
+        dest: /etc/nginx/sites-available/default
+        mode: '0644'
+      notify: restart nginx
+      
+    - name: Create world-writable application directory
+      # Security issue: Excessive file permissions
+      file:
+        path: /app/data
+        state: directory
+        mode: '0777'
+        owner: root
+        group: root
+        
+    - name: Store API keys in plain text file
+      # Security issue: Storing secrets in plaintext
+      copy:
+        content: |
+          API_KEY={{ api_key }}
+          AWS_ACCESS_KEY={{ aws_access_key }}
+          AWS_SECRET_KEY={{ aws_secret_key }}
+          MYSQL_PASSWORD={{ mysql_root_password }}
+        dest: /app/config/secrets.txt
+        mode: '0644'  # Security issue: World-readable secrets
+        
+    - name: Configure cron job with hardcoded credentials
+      # Security issue: Credentials in cron job
+      cron:
+        name: "Database backup"
+        minute: "0"
+        hour: "2"
+        job: "/usr/bin/mysqldump -u root -p{{ mysql_root_password }} production_db > /tmp/backup.sql"
+        
+    - name: Install FTP server with anonymous access
+      # Security issue: Anonymous FTP access
+      apt:
+        name: vsftpd
+        state: present
+      when: ansible_os_family == "Debian"
+      
+    - name: Configure FTP with insecure settings
+      # Security issue: Anonymous FTP enabled
+      lineinfile:
+        path: /etc/vsftpd.conf
+        regexp: '^anonymous_enable='
+        line: 'anonymous_enable=YES'
+      notify: restart vsftpd
+      
+    - name: Enable FTP write access
+      # Security issue: Anonymous write access
+      lineinfile:
+        path: /etc/vsftpd.conf
+        regexp: '^anon_upload_enable='
+        line: 'anon_upload_enable=YES'
+      notify: restart vsftpd
+      
+    - name: Disable SELinux
+      # Security issue: Disabling security feature
+      selinux:
+        state: disabled
+      when: ansible_os_family == "RedHat"
+      
+    - name: Configure weak SSL/TLS settings
