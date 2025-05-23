@@ -1,0 +1,55 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Vulnerable CloudFormation template for Checkov testing'
+
+Resources:
+  VulnerableS3Bucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      BucketName: 'vulnerable-bucket-2023'
+      # Security issue: Public access
+      AccessControl: 'PublicRead'
+      # Security issue: No encryption
+      # Security issue: No versioning
+      # Security issue: No logging
+      
+  VulnerableEC2Instance:
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      InstanceType: 't2.micro'
+      ImageId: 'ami-0c55b159cbfafe1f0'
+      # Security issue: Using default security group
+      SecurityGroupIds:
+        - !Ref VulnerableSecurityGroup
+      # Security issue: Public subnet
+      SubnetId: 'subnet-12345678'
+      # Security issue: No IMDSv2
+      MetadataOptions:
+        HttpTokens: 'optional'
+        HttpPutResponseHopLimit: 2
+
+  VulnerableSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: 'Vulnerable security group'
+      # Security issue: Wide open ingress
+      SecurityGroupIngress:
+        - IpProtocol: '-1'
+          CidrIp: '0.0.0.0/0'
+      # Security issue: Wide open egress
+      SecurityGroupEgress:
+        - IpProtocol: '-1'
+          CidrIp: '0.0.0.0/0'
+
+  VulnerableRDSInstance:
+    Type: 'AWS::RDS::DBInstance'
+    Properties:
+      DBInstanceClass: 'db.t3.micro'
+      Engine: 'mysql'
+      MasterUsername: 'admin'
+      MasterUserPassword: 'password123'  # Security issue: Hardcoded password
+      # Security issue: Publicly accessible
+      PubliclyAccessible: true
+      # Security issue: No encryption
+      StorageEncrypted: false
+      # Security issue: No backup
+      BackupRetentionPeriod: 0
