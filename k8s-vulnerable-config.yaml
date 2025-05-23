@@ -1,0 +1,79 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: insecure-namespace
+data:
+  # Security issue: Sensitive data in ConfigMap
+  database_url: "mysql://admin:password123@db.example.com:3306/production"
+  api_key: "sk_live_abcdefghijklmnopqrstuvwxyz"
+  aws_access_key: "AKIAIOSFODNN7EXAMPLE"
+  aws_secret_key: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+  admin_password: "admin123"
+  
+  # Application configuration
+  app.properties: |
+    debug=true
+    log.level=DEBUG
+    cors.allowed.origins=*
+    security.enabled=false
+    
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: app-secrets
+  namespace: insecure-namespace
+type: Opaque
+data:
+  # Security issue: Base64 is not encryption
+  username: YWRtaW4=  # admin
+  password: cGFzc3dvcmQxMjM=  # password123
+  api-key: c2tfbGl2ZV9hYmNkZWZnaGlqa2xtbm9wcXJzdHV2d3h5eg==  # sk_live_abcdefghijklmnopqrstuvwxyz
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: vulnerable-admin-role
+rules:
+# Security issue: Wildcard permissions
+- apiGroups: ["*"]
+  resources: ["*"]
+  verbs: ["*"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: vulnerable-admin-binding
+subjects:
+- kind: ServiceAccount
+  name: default  # Security issue: Using default service account
+  namespace: insecure-namespace
+roleRef:
+  kind: ClusterRole
+  name: vulnerable-admin-role
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: vulnerable-debug-pod
+  namespace: insecure-namespace
+spec:
+  # Security issue: Privileged pod
+  securityContext:
+    runAsUser: 0
+    runAsGroup: 0
+    fsGroup: 0
+  containers:
+  - name: debug-container
+    image: ubuntu:18.04  # Security issue: Outdated base image
+    command: ["/bin/sleep", "3600"]
+    securityContext:
+      privileged: true
+      allowPrivilegeEscalation: true
+      capabilities:
+        add: ["SYS_ADMIN", "NET_ADMIN", "SYS_TIME"]
+    # Security issue: No resource constraints
+    # Security issue: No health checks
